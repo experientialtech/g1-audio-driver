@@ -252,3 +252,31 @@ g1-audio-driver/
   install.sh               # Install/uninstall helper
   README.md                # This file
 ```
+
+## Web Interface
+
+A built-in web UI for managing the driver service from a browser. No external dependencies.
+
+```bash
+python3 g1_audio_web.py              # default port 8085
+python3 g1_audio_web.py --port 9000  # custom port
+```
+
+Then open `http://192.168.123.164:8085` (or whatever PC2's address is).
+
+### Features
+
+- **Status dashboard** — live service state (running/stopped), PID, uptime, PulseAudio device status (mic and speaker loaded/not loaded)
+- **Controls** — Start, Stop, Restart, and Force Kill buttons
+- **Log viewer** — last 100 journal lines, auto-refreshes every 5 seconds
+- **Auto-refresh** — status polls every 3 seconds
+
+### Force Kill
+
+The "Force Kill" button does more than a normal stop:
+1. Stops the systemd service
+2. Sends `SIGKILL` to any lingering driver processes
+3. Unloads PulseAudio pipe modules
+4. Cleans up FIFO pipes in `/tmp/`
+
+Use this when the driver is stuck and a normal stop/restart doesn't work.
