@@ -25,7 +25,7 @@ Audio format (both directions): 16-bit signed LE, mono, 16 kHz (32 KB/s)
 Requirements:
   - PulseAudio with module-pipe-source and module-pipe-sink
   - Unitree SDK2 Python (unitree_sdk2py) accessible on PYTHONPATH
-  - Network: eth0 connected to 192.168.123.0/24 (DDS + multicast)
+  - Network: DDS interface connected to 192.168.123.0/24 (set G1_DDS_INTERFACE if not eth0)
   - PC1 voice service running (provides mic multicast + PlayStream)
 
 Usage:
@@ -72,7 +72,8 @@ logger = logging.getLogger("g1audio")
 # Network
 MULTICAST_GROUP = "239.168.123.161"     # PC1 streams mic audio here
 MULTICAST_PORT = 5555                   # UDP port for multicast mic stream
-LOCAL_IP = "192.168.123.164"            # PC2 eth0 address (DDS interface)
+LOCAL_IP = "192.168.123.164"            # PC2 address (DDS interface)
+DDS_INTERFACE = os.environ.get("G1_DDS_INTERFACE", "eth0")
 
 # PCM format — same in both directions
 SAMPLE_RATE = 16000                     # Hz
@@ -140,8 +141,8 @@ class DDSAudio:
             from unitree_sdk2py.rpc.client import Client
             from unitree_sdk2py.g1.audio.g1_audio_client import AudioClient
 
-            logger.info("Initializing DDS on eth0...")
-            ChannelFactoryInitialize(0, "eth0")
+            logger.info("Initializing DDS on %s...", DDS_INTERFACE)
+            ChannelFactoryInitialize(0, DDS_INTERFACE)
             time.sleep(0.5)
 
             self._voice = Client("voice", False)
@@ -675,7 +676,7 @@ Systemd service:
         dds.init()
     except Exception as e:
         logger.error("Failed to initialize DDS: %s", e)
-        logger.error("Is eth0 up? Is unitree_sdk2py installed?")
+        logger.error("Is %s up? Is unitree_sdk2py installed?", DDS_INTERFACE)
         sys.exit(1)
 
     threads = []

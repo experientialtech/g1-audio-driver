@@ -6,6 +6,10 @@
 #   ./install.sh           Install and enable (auto-start on login)
 #   ./install.sh --start   Install, enable, and start immediately
 #   ./install.sh --remove  Stop, disable, and remove the service
+#
+# Environment variables (optional):
+#   UNITREE_SDK_PATH    Path to unitree_sdk2_python repo (default: auto-detect)
+#   G1_DDS_INTERFACE    Network interface for DDS (default: auto-detect from 192.168.123.0/24)
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -13,6 +17,35 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SERVICE_NAME="g1-audio-driver.service"
 SERVICE_SRC="$SCRIPT_DIR/$SERVICE_NAME"
 SERVICE_DST="$HOME/.config/systemd/user/$SERVICE_NAME"
+
+# ─── Auto-detect DDS interface ───────────────────────────────────────────────
+detect_dds_interface() {
+    # Find the interface that has a 192.168.123.x address
+    local iface
+    iface=$(ip -o -4 addr show | grep '192\.168\.123\.' | awk '{print $2}' | head -1)
+    if [[ -n "$iface" ]]; then
+        echo "$iface"
+    else
+        echo "eth0"
+    fi
+}
+
+# ─── Auto-detect SDK path ───────────────────────────────────────────────────
+detect_sdk_path() {
+    # Check common locations
+    local candidates=(
+        "$SCRIPT_DIR/../repos/unitree-sdk2-python"
+        "$HOME/unitree-sdk2-python"
+        "$HOME/unitree_sdk2-main"
+    )
+    for path in "${candidates[@]}"; do
+        if [[ -d "$path/unitree_sdk2py" ]]; then
+            echo "$(cd "$path" && pwd)"
+            return
+        fi
+    done
+    echo "$HOME/unitree-sdk2-python"
+}
 
 # ─── Uninstall ────────────────────────────────────────────────────────────────
 if [[ "${1:-}" == "--remove" ]]; then
@@ -25,6 +58,10 @@ if [[ "${1:-}" == "--remove" ]]; then
     echo "✅ Removed"
     exit 0
 fi
+
+# ─── Resolve configuration ──────────────────────────────────────────────────
+DDS_INTERFACE="${G1_DDS_INTERFACE:-$(detect_dds_interface)}"
+SDK_PATH="${UNITREE_SDK_PATH:-$(detect_sdk_path)}"
 
 # ─── Pre-flight checks ───────────────────────────────────────────────────────
 echo "Checking prerequisites..."
@@ -41,10 +78,11 @@ fi
 
 if ! python3 -c "
 import sys
-sys.path.insert(0, '${UNITREE_SDK_PATH:-$HOME/unitree-sdk2-python}')
+sys.path.insert(0, '$SDK_PATH')
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize
 " 2>/dev/null; then
-    echo "❌ unitree_sdk2py not found (set UNITREE_SDK_PATH or install at ~/unitree-sdk2-python)"
+    echo "❌ unitree_sdk2py not found at: $SDK_PATH"
+    echo "   Set UNITREE_SDK_PATH or install at ~/unitree-sdk2-python"
     exit 1
 fi
 
@@ -57,15 +95,22 @@ for mod in module-pipe-source module-pipe-sink; do
 done
 
 echo "  ✅ PulseAudio running"
-echo "  ✅ unitree_sdk2py available"
+echo "  ✅ unitree_sdk2py available ($SDK_PATH)"
 echo "  ✅ pipe modules available"
+echo "  ✅ DDS interface: $DDS_INTERFACE"
 
 # ─── Install ──────────────────────────────────────────────────────────────────
 # Stop existing instance if running
 systemctl --user stop "$SERVICE_NAME" 2>/dev/null || true
 
 mkdir -p "$(dirname "$SERVICE_DST")"
-cp "$SERVICE_SRC" "$SERVICE_DST"
+
+# Template the service file with detected paths
+sed \
+    -e "s|__INSTALL_DIR__|$SCRIPT_DIR|g" \
+    -e "s|__UNITREE_SDK_PATH__|$SDK_PATH|g" \
+    -e "s|__DDS_INTERFACE__|$DDS_INTERFACE|g" \
+    "$SERVICE_SRC" > "$SERVICE_DST"
 echo "Installed → $SERVICE_DST"
 
 systemctl --user daemon-reload

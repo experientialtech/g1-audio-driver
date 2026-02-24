@@ -1,18 +1,19 @@
 [Unit]
 Description=G1 Onboard Audio Driver (Microphone + Speaker)
-Documentation=file:///home/unitree/g1-audio-driver/README.md
 After=pulseaudio.service network-online.target
 Wants=pulseaudio.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /home/unitree/g1-audio-driver/g1_audio_driver.py
+ExecStart=/usr/bin/python3 __INSTALL_DIR__/g1_audio_driver.py
 ExecStopPost=/usr/bin/bash -c 'rm -f /tmp/g1_mic.pipe /tmp/g1_spk.pipe'
 Restart=on-failure
 RestartSec=5
 StartLimitIntervalSec=300
 StartLimitBurst=10
 Environment=PYTHONUNBUFFERED=1
+Environment=UNITREE_SDK_PATH=__UNITREE_SDK_PATH__
+Environment=G1_DDS_INTERFACE=__DDS_INTERFACE__
 # Give the driver time to clean up PA modules on stop
 TimeoutStopSec=10
 # Logging
